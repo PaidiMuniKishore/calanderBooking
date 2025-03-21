@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendar Booking</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+        }
+        .calendar {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+            width: 80%;
+            margin: auto;
+            text-align: center;
+        }
+        .day {
+            padding: 10px;
+            border: 1px solid black;
+            background-color: green;
+            color: white;
+            position: relative;
+        }
+        .booked {
+            background-color: red !important;
+        }
+        button {
+            padding: 5px 10px;
+            margin: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 40%;
+            text-align: left;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
+        }
+        .close {
+            float: right;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        .modal-content input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .modal-content button {
+            width: 100%;
+            padding: 10px;
+            background-color: green;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .modal-content button:hover {
+            background-color: darkgreen;
+        }
+    </style>
+</head>
+<body>
+    <h1>Calendar Booking System</h1>
+    
+    <label for="monthSelect">Select Month:</label>
+    <select id="monthSelect">
+        <option value="January">January</option>
+        <option value="February">February</option>
+        <option value="March">March</option>
+        <option value="April">April</option>
+        <option value="May">May</option>
+        <option value="June">June</option>
+        <option value="July">July</option>
+        <option value="August">August</option>
+        <option value="September">September</option>
+        <option value="October">October</option>
+        <option value="November">November</option>
+        <option value="December">December</option>
+    </select>
+    <button onclick="fetchMonthData()">Get Month Details</button>
+    
+    <div class="calendar" id="calendarContainer"></div>
+
+    <!-- Booking Modal -->
+    <div id="bookingModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Book a Day</h2>
+            <label>Name:</label> <input type="text" id="name"><br>
+            <label>Rent:</label> <input type="text" id="rent"><br>
+            <label>Deposit:</label> <input type="text" id="deposit"><br>
+            <label>Other Allowances:</label> <input type="text" id="otherAllowances"><br>
+            <label>Advance Paid To:</label> <input type="text" id="advancePerson"><br>
+            <button onclick="confirmBooking()">Confirm Booking</button>
+        </div>
+
+    <script>
+        const apiBaseUrl = "http://localhost:8082/Calender";
+        let selectedDate, selectedMonth;
+
+        // Fetch month details from backend
+        async function fetchMonthData() {
+            const month = document.getElementById("monthSelect").value;
+            const response = await fetch(`${apiBaseUrl}/getMonthDetails/${month}`);
+            const data = await response.json();
+            generateCalendar(data, month);
+        }
+
+        // Generate calendar dynamically
+        function generateCalendar(data, month) {
+            const calendarContainer = document.getElementById("calendarContainer");
+            calendarContainer.innerHTML = "";
+
+            const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            daysOfWeek.forEach(day => {
+                const dayElement = document.createElement("div");
+                dayElement.style.fontWeight = "bold";
+                dayElement.textContent = day;
+                calendarContainer.appendChild(dayElement);
+            });
+
+            const firstDay = new Date(`${month} 1, 2025`).getDay();
+            for (let i = 0; i < firstDay; i++) {
+                const emptyDiv = document.createElement("div");
+                calendarContainer.appendChild(emptyDiv);
+            }
+
+            data.forEach(entry => {
+                const dayElement = document.createElement("div");
+                dayElement.className = "day";
+                dayElement.id = `date-${entry.day_of_month}`;
+                
+                if (entry.booked) {
+                    dayElement.classList.add("booked");
+                }
+                
+                dayElement.innerHTML = `
+                    <div>${entry.day_of_month}</div>
+                    <div id="status-${entry.day_of_month}">${entry.booked || "Available"}</div>
+                    <button onclick="openModal(${entry.day_of_month}, '${month}')">Book</button>
+                    <button onclick="deleteEvent(${entry.day_of_month}, '${month}')">Cancel</button>
+                    <button onclick="fetchBalance(${entry.day_of_month}, '${month}')">Balance</button>
+                    <button onclick="markAsPaid(${entry.day_of_month}, '${month}')">Pay</button>
+                `;
+                calendarContainer.appendChild(dayElement);
+            });
+        }
+        // Delete Event (Cancel Booking)
+            async function deleteEvent(date, month) {
+        const confirmation = confirm(`Are you sure you want to cancel the booking for ${month} ${date}?`);
+    
+        if (!confirmation) {
+        return;
+        }
+
+        await fetch(`${apiBaseUrl}/deleteEvent/${date}/${month}`, {
+        method: "PUT"
+        });
+
+        fetchMonthData(); // Refresh calendar after cancellation
+        }
+
+
+        // Open Booking Modal
+        function openModal(date, month) {
+            selectedDate = date;
+            selectedMonth = month;
+            document.getElementById("bookingModal").style.display = "block";
+        }
+
+        // Close Modal
+        function closeModal() {
+            document.getElementById("bookingModal").style.display = "none";
+        }
+
+       // Confirm Booking
+       async function confirmBooking() {
+            const name = document.getElementById("name").value;
+            const rent = document.getElementById("rent").value;
+            const deposit = document.getElementById("deposit").value;
+            const otherAllowances = document.getElementById("otherAllowances").value;
+            const advancePerson = document.getElementById("advancePerson").value;
+
+            if (!name || !rent || !deposit || !otherAllowances || !advancePerson) {
+                alert("Please fill all fields");
+                return;
+            }
+
+            await fetch(`${apiBaseUrl}/bookEvent/${selectedDate}/${selectedMonth}/${name}/${rent}/${deposit}/${otherAllowances}/${advancePerson}`, {
+                method: "PUT"
+            });
+            closeModal();
+            fetchMonthData();
+        }
+
+        // Fetch Balance
+        async function fetchBalance(date, month) {
+            const response = await fetch(`${apiBaseUrl}/showBalance/${date}/${month}`);
+            const balance = await response.json();
+            alert(`Balance for ${month} ${date}: ₹${balance}`);
+        }
+//======================================================
+
+// Mark as Paid (Update Electric Units and Set Electric Bill)
+// Mark as Paid (with validation and success confirmation)
+async function markAsPaid(date, month) {
+    const units = prompt(`Enter the number of electric units for ${month} ${date}:`);
+
+    if (units === null || units.trim() === "" || isNaN(units)) {
+        alert("⚠️ Please enter a valid number of units.");
+        return;
+    }
+
+    try {
+        // Step 1: Update Electric Units
+        await fetch(`${apiBaseUrl}/upadteElectricUnits/${date}/${month}/${units}`, {
+            method: "PUT"
+        });
+
+        // Step 2: Set Electric Bill
+        await fetch(`${apiBaseUrl}/setElectricBill/${date}/${month}`, {
+            method: "PUT"
+        });
+
+        // Step 3: Get Total Balance
+        const balanceResponse = await fetch(`${apiBaseUrl}/getTotalBalance/${date}/${month}`);
+        if (!balanceResponse.ok) throw new Error("Failed to fetch total balance.");
+        const totalBalance = await balanceResponse.json();
+        
+        // Step 4: Prompt user to enter balance amount
+        let enteredAmount = prompt(`Total balance for ${month} ${date} is ₹${totalBalance}. Enter the amount to pay:`);
+
+        if (enteredAmount === null || enteredAmount.trim() === "" || isNaN(enteredAmount)) {
+            alert("⚠️ Please enter a valid payment amount.");
+            return;
+        }
+
+        // Convert enteredAmount and totalBalance to proper floating point numbers
+        enteredAmount = parseFloat(enteredAmount).toFixed(2);
+        const expectedBalance = parseFloat(totalBalance).toFixed(2);
+
+        // Validate amount matches total balance
+        if (enteredAmount !== expectedBalance) {
+            alert(`⚠️ The entered amount ₹${enteredAmount} must exactly match the total balance ₹${expectedBalance}.`);
+            return;
+        }
+
+        // Step 5: Mark as Paid
+        const paidResponse = await fetch(`${apiBaseUrl}/Paid/${date}/${month}/${enteredAmount}`, {
+            method: "PUT"
+        });
+
+        if (!paidResponse.ok) {
+            const errorMessage = await paidResponse.text();
+            throw new Error(`Payment API failed: ${errorMessage}`);
+        }
+
+        alert("✅ Payment successful!");
+        
+    } catch (error) {
+        console.error("Error processing payment:", error);
+        alert(`❌ Failed to process payment: ${error.message}`);
+    }
+}
+
+
+
+
+
+    </script>
+</body>
+</html>
